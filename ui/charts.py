@@ -1,107 +1,81 @@
 # ui/charts.py
+import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import pandas as pd
-from ui.styles import SIGNAL_COLORS, THEME
-from src.decoder import extract_signal_timeseries
+from src.decoder import decode_can_payload
 
-def build_oscilloscope_figure(
-    df: pd.DataFrame, 
-    selected_signals: list, 
-    signal_to_msg_hex: dict, 
-    signal_choices: dict, 
-    db
-) -> go.Figure:
-    """
-    Renders an oscilloscope graph with clean signal names and zero title overlap.
-    """
-    num_sigs = len(selected_signals)
-    if num_sigs == 0:
+SIGNAL_PALETTE = [
+    "#38bdf8", "#4ade80", "#f59e0b", "#f43f5e", 
+    "#a855f7", "#06b6d4", "#ec4899", "#10b981"
+]
+
+def build_oscilloscope_figure(df, selected_signals, signal_to_msg_hex, signal_choices, db):    
+    if not selected_signals or df is None or df.empty:
         return go.Figure()
 
-    # Vertical spacing prevents tracks from crowding headers
+    # Deduplicate strictly
+    unique_signals = []
+    for s in selected_signals:
+        if s not in unique_signals:
+            unique_signals.append(s)
+            
+    num_signals = len(unique_signals)
+
     fig = make_subplots(
-        rows=num_sigs, cols=1,
+        rows=num_signals,
+        cols=1,
         shared_xaxes=True,
-        vertical_spacing=max(0.12, 0.26 / num_sigs),
-        subplot_titles=[f"<b>{sig}</b>" for sig in selected_signals]
+        vertical_spacing=0.08,
+        subplot_titles=[f"<b>{s}</b>" for s in unique_signals]
     )
 
-    for s_idx, s_name in enumerate(selected_signals, 1):
-        df_plot = extract_signal_timeseries(df, s_name, signal_to_msg_hex, db)
-        trace_color = SIGNAL_COLORS[(s_idx - 1) % len(SIGNAL_COLORS)]
-        
-        is_discrete = s_name in signal_choices or (not df_plot.empty and df_plot[s_name].dtype == object)
+    for row_idx, s_name in enumerate(unique_signals, start=1):
+        color = SIGNAL_PALETTE[(row_idx - 1) % len(SIGNAL_PALETTE)]
+        m_hex = signal_to_msg_hex.get(s_name)
 
-        if not df_plot.empty:
-            fig.add_trace(
-                go.Scatter(
-                    x=df_plot['Relative_Time_ms'],
-                    y=df_plot[s_name],
-                    mode='lines+markers',
-                    line=dict(
-                        color=trace_color,
-                        width=1.5,
-                        shape='hv' if is_discrete else 'linear'
-                    ),
-                    marker=dict(size=3.5, color=trace_color),
-                    name=s_name
-                ),
-                row=s_idx, col=1
-            )
+        if not m_hex:
+            continue
 
-        # Technical Y-Axis
-        y_conf = dict(
-            showline=True, 
-            linewidth=1, 
-            linecolor=THEME['plot_axis'], 
-            mirror=True,
-            showgrid=True, 
-            gridcolor=THEME['plot_grid'], 
-            gridwidth=1,
-            zeroline=False,
-            tickfont=dict(family="Consolas, monospace", size=10, color=THEME['text_muted'])
+        msg_df = df[df["CAN_ID"] == m_hex]
+        times = []
+        vals = []
+
+        for _, row in msg_df.iterrows():
+            payload = row.get("Payload")
+            rel_time = row.get("Relative_Time_ms")
+            if payload is None or rel_time is None:
+                continue
+
+            decoded = decode_can_payload(m_hex, payload, db)
+            if isinstance(decoded, dict) and s_name in decoded:
+                v = decoded[s_name]
+                if v is not None:
+                    times.append(rel_time)
+                    vals.append(v)
+
+        is_discrete = len(vals) > 0 and isinstance(vals[0], str)
+        line_shape = "hv" if is_discrete else "linear"
+
+        # Add single trace per row
+        fig.add_trace(
+            go.Scatter(
+                x=times,
+                y=vals,
+                mode="lines",
+                name=s_name,
+                line=dict(color=color, width=2, shape=line_shape)
+            ),
+            row=row_idx,
+            col=1
         )
-        if s_name in signal_choices:
-            y_conf.update(dict(categoryarray=signal_choices[s_name], type='category'))
-        fig.update_yaxes(**y_conf, row=s_idx, col=1)
-
-        # Technical X-Axis
-        fig.update_xaxes(
-            showline=True, 
-            linewidth=1, 
-            linecolor=THEME['plot_axis'], 
-            mirror=True,
-            showgrid=True, 
-            gridcolor=THEME['plot_grid'],
-            gridwidth=1,
-            showspikes=True, 
-            spikemode="across", 
-            spikesnap="cursor",
-            spikethickness=1, 
-            spikedash="solid", 
-            spikecolor=THEME['accent'],
-            rangeslider=dict(visible=False),
-            ticksuffix=" ms",
-            tickfont=dict(family="Consolas, monospace", size=10, color=THEME['text_muted']),
-            row=s_idx, col=1
-        )
-
-    # Shift titles above the coordinate box line
-    for annotation in fig['layout']['annotations']:
-        annotation['font'] = dict(family="Segoe UI, Tahoma, sans-serif", size=11, color=THEME['text_main'])
-        annotation['x'] = 0.005
-        annotation['xanchor'] = 'left'
-        annotation['yanchor'] = 'bottom'
-        annotation['yshift'] = 14
 
     fig.update_layout(
-        height=max(220 * num_sigs, 280),
-        showlegend=False,
-        hovermode="x unified",
-        margin=dict(l=45, r=45, t=48, b=25),
-        plot_bgcolor=THEME['plot_bg'],
+        template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Segoe UI, Tahoma, sans-serif", color=THEME['text_muted'])
+        plot_bgcolor="rgba(15,23,42,0.6)",
+        height=max(280, 220 * num_signals),
+        showlegend=False,
+        margin=dict(l=60, r=30, t=30, b=30)
     )
+
     return fig

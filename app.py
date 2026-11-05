@@ -194,10 +194,13 @@ else:
             st.info("Attach a `.dbc` file in Configuration to decode physical signals.")
         else:
             all_signals = sorted(list(signal_to_msg_hex.keys()))
-            num_logs = len(loaded_data)
-            scope_cols = st.columns(num_logs)
+            unique_trace_names = list(dict.fromkeys(loaded_data.keys()))
+            num_logs = len(unique_trace_names)
             
-            for idx, (fname, f_df) in enumerate(loaded_data.items()):
+            scope_cols = st.columns(num_logs) if num_logs > 1 else [st.container()]
+            
+            for idx, fname in enumerate(unique_trace_names):
+                f_df = loaded_data[fname]
                 f_duration_ms = round(f_df['Relative_Time_ms'].iloc[-1], 1)
                 
                 with scope_cols[idx]:
@@ -205,6 +208,7 @@ else:
                     <div class="tool-titlebar">Channel {idx+1}: {fname} [{len(f_df):,} frames | {f_duration_ms:,.0f} ms]</div>
                     """, unsafe_allow_html=True)
                     
+                    # Consistent session key for this trace across all tabs
                     f_signals = st.multiselect(
                         f"Signals for {fname}",
                         all_signals,
@@ -214,25 +218,22 @@ else:
                     )
                     
                     if f_signals:
-                        fig_col = build_oscilloscope_figure(f_df, f_signals, signal_to_msg_hex, signal_choices, db)
-                        st.plotly_chart(fig_col, use_container_width=True)
-                        if f_signals:
-                            fig_col = build_oscilloscope_figure(
-                                f_df, f_signals, signal_to_msg_hex, signal_choices, db
-                            )
-                            st.plotly_chart(fig_col, use_container_width=True)
+                        fig_col = build_oscilloscope_figure(
+                            f_df, f_signals, signal_to_msg_hex, signal_choices, db
+                        )
+                        st.plotly_chart(fig_col, use_container_width=True, key=f"plotly_chart_{fname}_{idx}")
                         
-                            # --- NATIVE SAVE AS PLOT ---
-                            default_plot_name = f"scope_{os.path.splitext(fname)[0]}.html"
-                            if st.button("Save Plot as Interactive HTML", key=f"btn_save_plot_{fname}"):
-                                save_dest = ask_save_path(
-                                    default_filename=default_plot_name,
-                                    file_types=[("Interactive HTML Plot", "*.html"), ("All Files", "*.*")]
-                                )
-                                if save_dest:
-                                    fig_col.write_html(save_dest)
-                                    st.success(f"Plot saved successfully: `{save_dest}`")
-                                    open_in_explorer(save_dest)
+                        # Native Save As Dialog for Plot
+                        default_plot_name = f"scope_{os.path.splitext(fname)[0]}.html"
+                        if st.button("Save Plot as Interactive HTML", key=f"btn_save_plot_{fname}_{idx}"):
+                            save_dest = ask_save_path(
+                                default_filename=default_plot_name,
+                                file_types=[("Interactive HTML Plot", "*.html"), ("All Files", "*.*")]
+                            )
+                            if save_dest:
+                                fig_col.write_html(save_dest)
+                                st.success(f"Plot saved: `{save_dest}`")
+                                open_in_explorer(save_dest)
                     else:
                         st.caption("Select physical signals to render waveform channels.")
 
@@ -314,9 +315,9 @@ else:
                 else:
                     st.info("No transitions occurred.")
 
-# ==========================================
-# TAB 4: LOGGING & EXPORT SETUP
-# ==========================================
+    # ==========================================
+    # TAB 4: LOGGING & EXPORT SETUP
+    # ==========================================
     with tab_export:
         st.markdown("<div style='margin-top: 14px;'></div>", unsafe_allow_html=True)
         st.markdown('<div class="tab-section-heading">Automated Documentation & Data Export</div>', unsafe_allow_html=True)
@@ -367,6 +368,7 @@ else:
             </div>
             """, unsafe_allow_html=True)
             
+            # Read signals using the exact key stored in Tab 1
             f_selected_signals = st.session_state.get(f"scope_signals_{target_export_file}", [])
             default_csv_name = f"signals_{os.path.splitext(target_export_file)[0]}.csv"
             
