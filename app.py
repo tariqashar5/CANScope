@@ -3,6 +3,7 @@ import streamlit as st
 import os
 import io
 import pandas as pd
+from src.exporter import ask_save_path, save_content, open_in_explorer
 
 # Core Engine Modules
 from src.parser import parse_can_log
@@ -213,10 +214,25 @@ else:
                     )
                     
                     if f_signals:
-                        fig_col = build_oscilloscope_figure(
-                            f_df, f_signals, signal_to_msg_hex, signal_choices, db
-                        )
+                        fig_col = build_oscilloscope_figure(f_df, f_signals, signal_to_msg_hex, signal_choices, db)
                         st.plotly_chart(fig_col, use_container_width=True)
+                        if f_signals:
+                            fig_col = build_oscilloscope_figure(
+                                f_df, f_signals, signal_to_msg_hex, signal_choices, db
+                            )
+                            st.plotly_chart(fig_col, use_container_width=True)
+                        
+                            # --- NATIVE SAVE AS PLOT ---
+                            default_plot_name = f"scope_{os.path.splitext(fname)[0]}.html"
+                            if st.button("Save Plot as Interactive HTML", key=f"btn_save_plot_{fname}"):
+                                save_dest = ask_save_path(
+                                    default_filename=default_plot_name,
+                                    file_types=[("Interactive HTML Plot", "*.html"), ("All Files", "*.*")]
+                                )
+                                if save_dest:
+                                    fig_col.write_html(save_dest)
+                                    st.success(f"Plot saved successfully: `{save_dest}`")
+                                    open_in_explorer(save_dest)
                     else:
                         st.caption("Select physical signals to render waveform channels.")
 
@@ -298,19 +314,18 @@ else:
                 else:
                     st.info("No transitions occurred.")
 
-    # ==========================================
-    # TAB 4: LOGGING & EXPORT SETUP
-    # ==========================================
+# ==========================================
+# TAB 4: LOGGING & EXPORT SETUP
+# ==========================================
     with tab_export:
         st.markdown("<div style='margin-top: 14px;'></div>", unsafe_allow_html=True)
-        # TAB HEADING: BIGGER & NOT BOLD
         st.markdown('<div class="tab-section-heading">Automated Documentation & Data Export</div>', unsafe_allow_html=True)
         
         target_export_file = st.radio(
             "Target Log Selection", 
             options=file_options, 
             horizontal=True, 
-            key="export_target_file",
+            key="export_target_file", 
             label_visibility="collapsed"
         )
         st.markdown("<div style='margin-top: 14px;'></div>", unsafe_allow_html=True)
@@ -327,17 +342,22 @@ else:
                 <p style="font-size: 13.5px; color: {THEME['text_muted']}; margin: 10px 0 14px 0;">Export complete bus statistics, ASIL verification, and transition logs for {target_export_file}.</p>
             </div>
             """, unsafe_allow_html=True)
-            report_html = generate_html_report(
-                target_export_file, len(exp_df), exp_df['CAN_ID'].nunique(), exp_duration_s,
-                exp_health_df, pd.DataFrame(), pd.DataFrame()
-            )
-            st.download_button(
-                label=f"Generate Verification Report ({target_export_file})",
-                data=report_html.encode('utf-8'),
-                file_name=f"report_{os.path.splitext(target_export_file)[0]}.html",
-                mime="text/html",
-                use_container_width=True
-            )
+            
+            default_report_name = f"report_{os.path.splitext(target_export_file)[0]}.html"
+            
+            if st.button(f"Save Verification Report ({target_export_file})", use_container_width=True, key="btn_save_report"):
+                chosen_path = ask_save_path(
+                    default_filename=default_report_name,
+                    file_types=[("HTML Report", "*.html"), ("All Files", "*.*")]
+                )
+                if chosen_path:
+                    report_html = generate_html_report(
+                        target_export_file, len(exp_df), exp_df['CAN_ID'].nunique(), exp_duration_s,
+                        exp_health_df, pd.DataFrame(), pd.DataFrame()
+                    )
+                    save_content(chosen_path, report_html)
+                    st.success(f"Report saved: `{chosen_path}`")
+                    open_in_explorer(chosen_path)
                 
         with c2:
             st.markdown(f"""
@@ -348,29 +368,32 @@ else:
             """, unsafe_allow_html=True)
             
             f_selected_signals = st.session_state.get(f"scope_signals_{target_export_file}", [])
+            default_csv_name = f"signals_{os.path.splitext(target_export_file)[0]}.csv"
+            
             if f_selected_signals:
-                combined_frames = {}
-                for s_name in f_selected_signals:
-                    m_hex = signal_to_msg_hex[s_name]
-                    df_s = exp_df[exp_df['CAN_ID'] == m_hex].copy()
-                    df_s['Decoded'] = df_s['Payload'].apply(lambda x: decode_can_payload(m_hex, x, db))
-                    df_s[s_name] = df_s['Decoded'].apply(lambda d: d.get(s_name) if isinstance(d, dict) else None)
-                    combined_frames[s_name] = df_s[['Relative_Time_ms', s_name]].dropna(subset=[s_name])
-                
-                export_df = pd.DataFrame()
-                for s_name, s_df in combined_frames.items():
-                    s_idx = s_df.set_index('Relative_Time_ms')
-                    export_df = s_idx if export_df.empty else export_df.join(s_idx, how='outer')
-                export_df = export_df.ffill().reset_index()
-                
-                csv_data = export_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label=f"Export Synchronized CSV ({len(f_selected_signals)} Signals)",
-                    data=csv_data,
-                    file_name=f"signals_{os.path.splitext(target_export_file)[0]}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+                if st.button(f"Save Synchronized CSV ({len(f_selected_signals)} Signals)", use_container_width=True, key="btn_save_csv"):
+                    chosen_path = ask_save_path(
+                        default_filename=default_csv_name,
+                        file_types=[("CSV Spreadsheet", "*.csv"), ("All Files", "*.*")]
+                    )
+                    if chosen_path:
+                        combined_frames = {}
+                        for s_name in f_selected_signals:
+                            m_hex = signal_to_msg_hex[s_name]
+                            df_s = exp_df[exp_df['CAN_ID'] == m_hex].copy()
+                            df_s['Decoded'] = df_s['Payload'].apply(lambda x: decode_can_payload(m_hex, x, db))
+                            df_s[s_name] = df_s['Decoded'].apply(lambda d: d.get(s_name) if isinstance(d, dict) else None)
+                            combined_frames[s_name] = df_s[['Relative_Time_ms', s_name]].dropna(subset=[s_name])
+                        
+                        export_df = pd.DataFrame()
+                        for s_name, s_df in combined_frames.items():
+                            s_idx = s_df.set_index('Relative_Time_ms')
+                            export_df = s_idx if export_df.empty else export_df.join(s_idx, how='outer')
+                        export_df = export_df.ffill().reset_index()
+                        
+                        save_content(chosen_path, export_df.to_csv(index=False))
+                        st.success(f"CSV saved: `{chosen_path}`")
+                        open_in_explorer(chosen_path)
             else:
                 st.info("Select signals in the Graphics window to enable CSV export.")
 
