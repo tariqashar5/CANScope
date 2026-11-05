@@ -1,0 +1,26 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+venv_canalyzer/
+
+# Build & Compiled Binaries (Never commit the 200MB+ dist folder)
+build/
+dist/
+*.spec
+*.exe
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary session data & local uploads
+data/
+*.blf
+*.asc
+*.dbc
+
+# IDE settings
+.vscode/
+.idea/
