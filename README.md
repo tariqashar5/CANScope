@@ -52,6 +52,7 @@ Waveform Plots    Timing/Jitter    Safety Checks     HTML Reports
 | **Trace Window** | Frame-Level Diagnostics | Chronological CAN/CAN FD traffic, DLC/hex inspections, payload coloring |
 
 ---
+> For complete step-by-step operating instructions, ISO 26262 audit specifications, and troubleshooting, refer to the [CANscope User & Operations Manual](docs/CANscope User & Operations Manual.pdf).
 
 ## Quick Start (Pre-Compiled Executable)
 
