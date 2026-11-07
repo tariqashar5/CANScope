@@ -1,7 +1,7 @@
-streamlit>=1.30.0
-cantools>=39.4.0
-python-can>=4.3.0
-pandas>=2.0.0
-plotly>=5.18.0
-pywebview>=4.4.1
-pyinstaller>=6.3.0
+streamlit>=1.24.0,<1.29.0
+cantools>=38.0.0
+python-can>=4.0.0
+pandas>=1.5.0,<2.1.0
+plotly>=5.14.0
+pywebview>=4.0.0
+pyinstaller>=5.13.0,<6.3.0
