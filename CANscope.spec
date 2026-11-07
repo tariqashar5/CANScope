@@ -11,8 +11,10 @@ datas += collect_data_files('streamlit')
 datas += collect_data_files('cantools')
 datas += collect_data_files('plotly')
 datas += collect_data_files('webview')
+datas += collect_data_files('pyarrow')
 datas += copy_metadata('streamlit')
 datas += copy_metadata('cantools')
+datas += copy_metadata('pyarrow')
 
 hiddenimports = [
     'tkinter',
@@ -24,6 +26,8 @@ hiddenimports = [
     'cantools',
     'plotly',
     'pandas',
+    'numpy',
+    'pyarrow',
     'can',
     'can.io.blf',
     'can.io.asc',
@@ -34,6 +38,7 @@ hiddenimports += collect_submodules('streamlit')
 hiddenimports += collect_submodules('cantools')
 hiddenimports += collect_submodules('plotly')
 hiddenimports += collect_submodules('webview')
+hiddenimports += collect_submodules('pyarrow')
 
 block_cipher = None
 
