@@ -14,6 +14,7 @@ dist/
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 
 # Temporary session data & local uploads
 data/
