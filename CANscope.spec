@@ -37,8 +37,11 @@ hiddenimports += collect_submodules('webview')
 
 block_cipher = None
 
+# Ensure the entry file matches your root script (run_app.py or app.py)
+entry_script = 'run_app.py'
+
 a = Analysis(
-    ['run_app.py'],
+    [entry_script],
     pathex=[],
     binaries=[],
     datas=datas,
@@ -46,7 +49,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib', 'scipy', 'tkinter', 'pytest'],
+    excludes=['matplotlib', 'scipy', 'pytest'],  # Removed tkinter from here
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -64,8 +67,8 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    console=False,  # Set to False so NO black terminal pops up
+    upx=False,  # Set to False to prevent permission/EDR locks
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -79,7 +82,7 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     name='CANscope',
 )
